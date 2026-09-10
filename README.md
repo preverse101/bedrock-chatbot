@@ -1,6 +1,6 @@
 # Bedrock Chatbot
 
-A multi-turn chatbot powered by AWS Bedrock (Claude models) routed through the AI Gateway (Portkey), with a streaming chat UI built on Streamlit.
+A multi-turn chatbot powered by AWS Bedrock (Claude models) routed through the AIRS API Runtime (not Portkey), with a streaming chat UI built on Streamlit.
 
 ## Architecture
 
