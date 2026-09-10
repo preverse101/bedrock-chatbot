@@ -5,7 +5,7 @@ A multi-turn chatbot powered by AWS Bedrock (Claude models) routed through the A
 ## Architecture
 
 ```
-User → Streamlit UI → AI Gateway (Portkey) → AWS Bedrock (Claude)
+User → Streamlit UI → AIRS API Runtime (not Portkey) → AWS Bedrock (Claude)
 ```
 
 All LLM requests are routed through AI Gateway, which provides request logging, observability, and governance. AWS Bedrock credentials are stored as a virtual key in AI Gateway — the app itself only needs the AI Gateway API key.
