@@ -1,8 +1,9 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import os
 import streamlit as st
-from anthropic import AnthropicBedrock
+from portkey_ai import Portkey
 
 st.set_page_config(
     page_title="Bedrock Chat",
@@ -76,27 +77,33 @@ DEFAULT_SYSTEM = (
 )
 
 
-def get_client() -> AnthropicBedrock:
-    region = st.session_state.get("aws_region", "us-east-1")
-    return AnthropicBedrock(aws_region=region)
+def get_client() -> Portkey:
+    return Portkey(
+        api_key=os.environ.get("PORTKEY_API_KEY"),
+        provider="@bedrock-dev-integration",
+    )
 
 
 def stream_response(messages: list, model: str, system: str) -> str:
     client = get_client()
     full_text = ""
     placeholder = st.empty()
-    with client.messages.stream(
+
+    all_messages = [{"role": "system", "content": system}] + messages
+
+    stream = client.chat.completions.create(
         model=model,
         max_tokens=4096,
-        system=system,
-        messages=messages,
-    ) as stream:
-        for text in stream.text_stream:
-            full_text += text
-            placeholder.markdown(
-                f'<div class="message-assistant">{full_text}▌</div>',
-                unsafe_allow_html=True,
-            )
+        messages=all_messages,
+        stream=True,
+    )
+    for chunk in stream:
+        text = chunk.choices[0].delta.content or ""
+        full_text += text
+        placeholder.markdown(
+            f'<div class="message-assistant">{full_text}▌</div>',
+            unsafe_allow_html=True,
+        )
     placeholder.markdown(
         f'<div class="message-assistant">{full_text}</div>',
         unsafe_allow_html=True,
@@ -109,6 +116,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "aws_region" not in st.session_state:
     st.session_state.aws_region = "us-east-1"
+
 
 
 # --- Sidebar ---
