@@ -8,7 +8,7 @@ A multi-turn chatbot powered by AWS Bedrock (Claude models) routed through the A
 User → Streamlit UI → AIRS API Runtime (not Portkey) → AWS Bedrock (Claude)
 ```
 
-All LLM requests are routed through AI Gateway, which provides request logging, observability, and governance. AWS Bedrock credentials are stored as a virtual key in AI Gateway — the app itself only needs the AI Gateway API key.
+Every user message is scanned by Prisma AIRS before being sent to Bedrock, and the model response is scanned again before being shown to the user. The app connects directly to AWS Bedrock — no proxy or gateway in the request path.
 
 ## Features
 
@@ -17,14 +17,15 @@ All LLM requests are routed through AI Gateway, which provides request logging, 
 - Model selector: Claude Opus 5, Sonnet 5, Fable 5.1, Opus 4.8, Haiku 4.5
 - Editable system prompt
 - Dark-themed chat UI
-- All traffic logged and observable in AI Gateway dashboard
+- Prompt and response scanning via Prisma AIRS API Runtime
+- Security violations blocked before reaching the model or the user
 
 ## Prerequisites
 
 - Python 3.9+
 - AWS account with Bedrock access enabled and Claude models activated
 - IAM user with `bedrock:*` permissions
-- AI Gateway (Portkey) account with a Bedrock virtual key configured
+- Prisma AIRS account with an API key and a security profile created
 
 ## Setup
 
@@ -50,19 +51,16 @@ Edit `.env` with your credentials:
 AWS_ACCESS_KEY_ID=your_aws_access_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 AWS_DEFAULT_REGION=us-east-1
-PORTKEY_API_KEY=your_ai_gateway_api_key
+AIRS_API_KEY=your_airs_api_key
 ```
 
-> The AWS credentials are used to set up the Bedrock virtual key in AI Gateway.
-> The app itself only calls AI Gateway using `PORTKEY_API_KEY` at runtime.
+**4. Set your AIRS profile name**
 
-**4. Set up AI Gateway virtual key**
+In `prisma_airs_integration.py`, set `AIRS_PROFILE` to the name of the security profile you created in the Prisma AIRS console:
 
-- Log into [AI Gateway (Portkey)](https://portkey.ai)
-- Go to Virtual Keys → Add New → select AWS Bedrock
-- Enter your AWS credentials and region
-- Name it `bedrock-dev-integration`
-- Save the virtual key
+```python
+AIRS_PROFILE = "your-profile-name"
+```
 
 **5. Enable Bedrock model access**
 
@@ -71,7 +69,7 @@ In the [AWS Bedrock console](https://console.aws.amazon.com/bedrock/home#/modela
 ## Run
 
 ```bash
-venv/bin/streamlit run app.py
+venv/bin/streamlit run app.py --server.headless true
 ```
 
 Opens at `http://localhost:8501`.
@@ -83,7 +81,7 @@ Opens at `http://localhost:8501`.
 | `AWS_ACCESS_KEY_ID` | AWS IAM access key |
 | `AWS_SECRET_ACCESS_KEY` | AWS IAM secret key |
 | `AWS_DEFAULT_REGION` | AWS region (e.g. `us-east-1`) |
-| `PORTKEY_API_KEY` | AI Gateway API key |
+| `AIRS_API_KEY` | Prisma AIRS API key (`x-pan-token`) |
 
 ## Models Available
 
@@ -99,10 +97,12 @@ Opens at `http://localhost:8501`.
 
 ```
 bedrock-chatbot/
-├── app.py              # Streamlit app — UI and AI Gateway client
-├── requirements.txt    # Python dependencies
-├── .env                # Credentials (not committed)
-├── .env.example        # Credentials template
+├── app.py                        # Streamlit app — UI and Bedrock client
+├── prisma_airs_integration.py    # Prisma AIRS scan function
+├── PRISMA_AIRS_INTEGRATION.md    # AIRS integration documentation
+├── requirements.txt              # Python dependencies
+├── .env                          # Credentials (not committed)
+├── .env.example                  # Credentials template
 ├── .gitignore
 └── README.md
 ```
