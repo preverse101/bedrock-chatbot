@@ -3,7 +3,8 @@ load_dotenv()
 
 import os
 import streamlit as st
-from portkey_ai import Portkey
+from anthropic import AnthropicBedrock
+from prisma_airs_integration import scan_content
 
 st.set_page_config(
     page_title="Bedrock Chat",
@@ -77,10 +78,11 @@ DEFAULT_SYSTEM = (
 )
 
 
-def get_client() -> Portkey:
-    return Portkey(
-        api_key=os.environ.get("PORTKEY_API_KEY"),
-        provider="@bedrock-dev-integration",
+def get_client() -> AnthropicBedrock:
+    return AnthropicBedrock(
+        aws_access_key=os.environ.get("AWS_ACCESS_KEY_ID"),
+        aws_secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+        aws_region=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
     )
 
 
@@ -89,21 +91,19 @@ def stream_response(messages: list, model: str, system: str) -> str:
     full_text = ""
     placeholder = st.empty()
 
-    all_messages = [{"role": "system", "content": system}] + messages
-
-    stream = client.chat.completions.create(
+    with client.messages.stream(
         model=model,
         max_tokens=4096,
-        messages=all_messages,
-        stream=True,
-    )
-    for chunk in stream:
-        text = chunk.choices[0].delta.content or ""
-        full_text += text
-        placeholder.markdown(
-            f'<div class="message-assistant">{full_text}▌</div>',
-            unsafe_allow_html=True,
-        )
+        system=system,
+        messages=messages,
+    ) as stream:
+        for text in stream.text_stream:
+            full_text += text
+            placeholder.markdown(
+                f'<div class="message-assistant">{full_text}▌</div>',
+                unsafe_allow_html=True,
+            )
+
     placeholder.markdown(
         f'<div class="message-assistant">{full_text}</div>',
         unsafe_allow_html=True,
@@ -115,8 +115,7 @@ def stream_response(messages: list, model: str, system: str) -> str:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "aws_region" not in st.session_state:
-    st.session_state.aws_region = "us-east-1"
-
+    st.session_state.aws_region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 
 
 # --- Sidebar ---
@@ -174,10 +173,17 @@ if user_input and user_input.strip():
 
     st.markdown(f'<div class="label-assistant role-label">Assistant</div>', unsafe_allow_html=True)
 
-    response_text = stream_response(
-        messages=st.session_state.messages,
-        model=model_id,
-        system=system_prompt,
-    )
-
-    st.session_state.messages.append({"role": "assistant", "content": response_text})
+    prompt_scan = scan_content(prompt=user_input.strip(), ai_model=model_id)
+    if prompt_scan.get("action") == "block":
+        st.error("Your request was blocked by security policy.")
+    else:
+        response_text = stream_response(
+            messages=st.session_state.messages,
+            model=model_id,
+            system=system_prompt,
+        )
+        response_scan = scan_content(prompt=user_input.strip(), response=response_text, ai_model=model_id)
+        if response_scan.get("action") == "block":
+            st.error("The AI response was blocked by security policy.")
+        else:
+            st.session_state.messages.append({"role": "assistant", "content": response_text})
